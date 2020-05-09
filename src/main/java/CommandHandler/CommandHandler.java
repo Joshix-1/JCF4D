@@ -2,13 +2,16 @@ package CommandHandler;
 
 import Command.Command;
 import org.javacord.api.DiscordApi;
+import org.javacord.api.entity.emoji.Emoji;
 import org.javacord.api.event.message.MessageCreateEvent;
 import util.CommandCleanupListener;
+import util.CommandPermission;
 import util.JCF4DUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 
@@ -17,6 +20,11 @@ public class CommandHandler {
     private final DiscordApi api;
     private final List<Command> commands;
     private List<String> prefixes;
+    private Optional<Emoji> successfulEmoji = Optional.empty();
+    private Optional<Emoji> unsuccessfulEmoji = Optional.empty();
+    private Optional<String> successfulString = Optional.empty();
+    private Optional<String> unsuccessfulString = Optional.empty();
+
 
     CommandHandler(DiscordApi api, String... prefixes) {
         this.api = api;
@@ -30,12 +38,19 @@ public class CommandHandler {
         api.addMessageCreateListener(this::runCommands);
     }
 
-    public void addCommands(Command... commands) {
-        this.commands.addAll(Arrays.asList(commands));
+    public CommandHandler addCommand(Command command) {
+        commands.add(command);
+        return this;
     }
 
-    public void addCommands(List<Command> commands) {
+    public CommandHandler addCommands(Command... commands) {
+        this.commands.addAll(Arrays.asList(commands));
+        return this;
+    }
+
+    public CommandHandler addCommands(List<Command> commands) {
         this.commands.addAll(commands);
+        return this;
     }
 
     private void runCommands(MessageCreateEvent event) {
@@ -65,13 +80,19 @@ public class CommandHandler {
 
     private void run(MessageCreateEvent event, Command command, String[] args) {
         try {
-            if (command.run(event, JCF4DUtils.createEmbed(event, command), args)) {
-                event.addReactionToMessage("☑️").join();
+            CommandPermission missingPermissions = command.getNeededPermission().getMissingPermissions(event);
+            if(missingPermissions.isEmpty()) {
+                if (command.run(event, JCF4DUtils.createEmbed(event, command), args)) {
+                    addSuccesfulToMessage(event);
+                } else {
+                    addUnsuccesfulToMessage(event);
+                }
             } else {
-                event.addReactionToMessage("❌").join();
+                JCF4DUtils.sendMissingPermissionErrorMessage(event, command, missingPermissions);
             }
         } catch(Exception e) {
-            event.addReactionToMessage("❌").join();
+            command.onError(e);
+            addUnsuccesfulToMessage(event);
         }
     }
 
@@ -86,5 +107,31 @@ public class CommandHandler {
     protected void addMentionPrefixes(List<String> listToAdd) {
         listToAdd.add(api.getYourself().getMentionTag());
         listToAdd.add(api.getYourself().getNicknameMentionTag());
+    }
+
+    private void addUnsuccesfulToMessage(MessageCreateEvent event) {
+        unsuccessfulEmoji.ifPresent(event::addReactionToMessage);
+        unsuccessfulString.ifPresent(event::addReactionToMessage);
+    }
+
+    private void addSuccesfulToMessage(MessageCreateEvent event) {
+        successfulEmoji.ifPresent(event::addReactionToMessage);
+        successfulString.ifPresent(event::addReactionToMessage);
+    }
+
+    public void setFeedBackEmojis(Emoji successful, Emoji unsuccessful) {
+        this.successfulEmoji = Optional.ofNullable(successful);
+        this.unsuccessfulEmoji = Optional.ofNullable(unsuccessful);
+
+        this.unsuccessfulString = Optional.empty();
+        this.successfulString = Optional.empty();
+    }
+
+    public void setFeedBackEmojis(String successful, String unsuccessful) {
+        this.successfulString = Optional.ofNullable(successful);
+        this.unsuccessfulString = Optional.ofNullable(unsuccessful);
+
+        this.successfulEmoji = Optional.empty();
+        this.unsuccessfulEmoji = Optional.empty();
     }
 }

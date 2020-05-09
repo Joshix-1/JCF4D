@@ -52,6 +52,14 @@ public class JCF4DUtils {
         return embed;
     }
 
+    static public void sendMissingPermissionErrorMessage (MessageCreateEvent event, Command command, CommandPermission missingPermissions) throws Exception {
+        EmbedBuilder embed = createEmbed(event, command).setColor(Color.RED);
+
+        missingPermissions.forEach(permissionType -> embed.addField("\u200B", permissionType.toString()));
+
+        event.getChannel().sendMessage(embed).join();
+    }
+
     static public Color getRandomColor() {
         return new Color(getRandom(0, 255), getRandom(0, 255), getRandom(0, 255));
     }

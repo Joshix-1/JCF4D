@@ -1,7 +1,9 @@
 package Command;
 
 import org.javacord.api.entity.message.embed.EmbedBuilder;
+import org.javacord.api.entity.permission.PermissionType;
 import org.javacord.api.event.message.MessageCreateEvent;
+import util.CommandPermission;
 
 import java.awt.*;
 import java.util.Optional;
@@ -19,4 +21,8 @@ public interface Command {
     Optional<Color> getColor();
 
     String getFooterMessage();
+
+    void onError(Exception e);
+
+    CommandPermission getNeededPermission();
 }

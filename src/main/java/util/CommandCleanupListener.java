@@ -64,6 +64,9 @@ public class CommandCleanupListener implements MessageDeleteListener {
     }
 
     private static String longToBinaryBlankString(long l)  {
-        return Long.toBinaryString(l).replace('0', '\u200B').replace('1', '\u200D');
+        return Long.toBinaryString(l)
+                .replace('0', '\u200B')
+                .replace('1', '\u200D')
+                + '\u200C';
     }
 }
