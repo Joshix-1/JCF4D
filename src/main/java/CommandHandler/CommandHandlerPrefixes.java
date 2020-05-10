@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.event.message.MessageCreateEvent;
+import util.JCF4DExceptionHandler;
 import util.JCF4DUtils;
 
 import java.io.File;
@@ -16,17 +17,17 @@ class CommandHandlerPrefixes extends CommandHandler {
     protected JsonNode prefixes;
 
 
-    protected CommandHandlerPrefixes(DiscordApi api, String defaultPrefix, JsonNode prefixes) {
-        super(api, defaultPrefix);
+    protected CommandHandlerPrefixes(DiscordApi api, JCF4DExceptionHandler exceptionHandler, String defaultPrefix, JsonNode prefixes) {
+        super(api, exceptionHandler, defaultPrefix);
         this.prefixes = prefixes;
     }
 
-    protected CommandHandlerPrefixes(DiscordApi api, String defaultPrefix, File jsonFile) throws IOException {
-        this(api, defaultPrefix, JCF4DUtils.readTextFromFile(jsonFile));
+    protected CommandHandlerPrefixes(DiscordApi api, JCF4DExceptionHandler exceptionHandler, String defaultPrefix, File jsonFile) throws IOException {
+        this(api, exceptionHandler, defaultPrefix, JCF4DUtils.readTextFromFile(jsonFile));
     }
 
-    protected CommandHandlerPrefixes(DiscordApi api, String defaultPrefix, String jsonString) throws IOException {
-        super(api, defaultPrefix);
+    protected CommandHandlerPrefixes(DiscordApi api, JCF4DExceptionHandler exceptionHandler, String defaultPrefix, String jsonString) throws IOException {
+        super(api, exceptionHandler, defaultPrefix);
 
         prefixes = objectMapper.readTree(jsonString);
     }

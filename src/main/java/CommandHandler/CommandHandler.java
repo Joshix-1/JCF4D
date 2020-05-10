@@ -2,34 +2,27 @@ package CommandHandler;
 
 import Command.Command;
 import org.javacord.api.DiscordApi;
-import org.javacord.api.entity.emoji.Emoji;
 import org.javacord.api.event.message.MessageCreateEvent;
-import util.CommandCleanupListener;
-import util.CommandPermission;
-import util.JCF4DUtils;
+import util.*;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.regex.Pattern;
 
 
 public class CommandHandler {
     private final static Pattern WHITE_SPACES = Pattern.compile("\\s+");
     private final DiscordApi api;
-    private final List<Command> commands;
+    private final HashMap<String, Command> aliases;
     private List<String> prefixes;
-    private Optional<Emoji> successfulEmoji = Optional.empty();
-    private Optional<Emoji> unsuccessfulEmoji = Optional.empty();
-    private Optional<String> successfulString = Optional.empty();
-    private Optional<String> unsuccessfulString = Optional.empty();
+    private Optional<JCF4DEmoji> successfulEmoji = Optional.empty();
+    private Optional<JCF4DEmoji> unsuccessfulEmoji = Optional.empty();
+    private JCF4DExceptionHandler exceptionHandler;
 
-
-    CommandHandler(DiscordApi api, String... prefixes) {
+    public CommandHandler(DiscordApi api, JCF4DExceptionHandler exceptionHandler, String... prefixes) {
         this.api = api;
+        this.exceptionHandler = exceptionHandler;
         this.prefixes = new ArrayList<>();
-        this.commands = new ArrayList<>();
+        this.aliases = new HashMap<>();
 
         this.prefixes.addAll(Arrays.asList(prefixes));
         addMentionPrefixes(this.prefixes);
@@ -39,22 +32,21 @@ public class CommandHandler {
     }
 
     public CommandHandler addCommand(Command command) {
-        commands.add(command);
+        addAliases(command);
         return this;
     }
 
     public CommandHandler addCommands(Command... commands) {
-        this.commands.addAll(Arrays.asList(commands));
-        return this;
+        return addCommands(Arrays.asList(commands));
     }
 
     public CommandHandler addCommands(List<Command> commands) {
-        this.commands.addAll(commands);
+        commands.forEach(this::addAliases);
         return this;
     }
 
     private void runCommands(MessageCreateEvent event) {
-        if(commands.size() == 0 || !event.getMessageAuthor().isRegularUser()) {
+        if(aliases.size() == 0 || !event.getMessageAuthor().isRegularUser()) {
             return;
         }
 
@@ -66,13 +58,12 @@ public class CommandHandler {
 
                 int commandIndex = Math.min(messageArr[0].isEmpty() ? 1 : 0, messageArr.length -1);
 
-                String[] args = Arrays.copyOfRange(messageArr, commandIndex + 1, messageArr.length);
+                String commandName = messageArr[commandIndex];
+                if(aliases.containsKey(commandName)) {
+                    String[] args = WHITE_SPACES.split(event.getMessageContent().substring(message.indexOf(commandName) + commandName.length()));
 
-                commands.forEach(command -> {
-                    if(JCF4DUtils.arrayContainsString(command.getAliases(), messageArr[commandIndex])) {
-                        api.getThreadPool().getExecutorService().submit(() -> run(event, command, args));
-                    }
-                });
+                    api.getThreadPool().getExecutorService().submit(() -> run(event, aliases.get(commandName), args));
+                }
                 break;
             }
         }
@@ -83,16 +74,18 @@ public class CommandHandler {
             CommandPermission missingPermissions = command.getNeededPermission().getMissingPermissions(event);
             if(missingPermissions.isEmpty()) {
                 if (command.run(event, JCF4DUtils.createEmbed(event, command), args)) {
-                    addSuccesfulToMessage(event);
+                    successfulEmoji.ifPresent(jcf4DEmoji -> jcf4DEmoji.addReactionToMessage(event).exceptionally(exceptionHandler::handleThrowable));
                 } else {
-                    addUnsuccesfulToMessage(event);
+                    unsuccessfulEmoji.ifPresent(jcf4DEmoji -> jcf4DEmoji.addReactionToMessage(event).exceptionally(exceptionHandler::handleThrowable));
                 }
             } else {
-                JCF4DUtils.sendMissingPermissionErrorMessage(event, command, missingPermissions);
+                unsuccessfulEmoji.ifPresent(jcf4DEmoji -> jcf4DEmoji.addReactionToMessage(event).exceptionally(exceptionHandler::handleThrowable));
+                exceptionHandler.handleMissingPermissions(event, command, missingPermissions);
             }
         } catch(Exception e) {
-            command.onError(e);
-            addUnsuccesfulToMessage(event);
+            unsuccessfulEmoji.ifPresent(jcf4DEmoji -> jcf4DEmoji.addReactionToMessage(event).exceptionally(exceptionHandler::handleThrowable));
+            successfulEmoji.ifPresent(jcf4DEmoji -> jcf4DEmoji.removeReactionFromMessage(event).exceptionally(exceptionHandler::handleThrowable));
+            exceptionHandler.handleCommandExecutionException(event, command, e);
         }
     }
 
@@ -109,29 +102,14 @@ public class CommandHandler {
         listToAdd.add(api.getYourself().getNicknameMentionTag());
     }
 
-    private void addUnsuccesfulToMessage(MessageCreateEvent event) {
-        unsuccessfulEmoji.ifPresent(event::addReactionToMessage);
-        unsuccessfulString.ifPresent(event::addReactionToMessage);
-    }
-
-    private void addSuccesfulToMessage(MessageCreateEvent event) {
-        successfulEmoji.ifPresent(event::addReactionToMessage);
-        successfulString.ifPresent(event::addReactionToMessage);
-    }
-
-    public void setFeedBackEmojis(Emoji successful, Emoji unsuccessful) {
+    public void addFeedBackEmojis(JCF4DEmoji successful, JCF4DEmoji unsuccessful) {
         this.successfulEmoji = Optional.ofNullable(successful);
         this.unsuccessfulEmoji = Optional.ofNullable(unsuccessful);
-
-        this.unsuccessfulString = Optional.empty();
-        this.successfulString = Optional.empty();
     }
 
-    public void setFeedBackEmojis(String successful, String unsuccessful) {
-        this.successfulString = Optional.ofNullable(successful);
-        this.unsuccessfulString = Optional.ofNullable(unsuccessful);
-
-        this.successfulEmoji = Optional.empty();
-        this.unsuccessfulEmoji = Optional.empty();
+    public void addAliases(Command command) {
+        for (String alias : command.getAliases()) {
+            aliases.put(alias.toLowerCase(), command);
+        }
     }
 }
